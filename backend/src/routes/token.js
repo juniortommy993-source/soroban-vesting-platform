@@ -29,8 +29,12 @@ function contractIdMiddleware(req, res, next) {
   next();
 }
 
-function invalidAddress(res, field) {
-  return res.status(400).json({ error: `invalid Stellar address: ${field}` });
+function rejectInvalidAddress(res, field, value) {
+  if (!validateStellarAddress(value)) {
+    res.status(400).json({ error: `invalid Stellar address: ${field}` });
+    return true;
+  }
+  return false;
 }
 
 router.get('/info', contractIdMiddleware, async (req, res, next) => {
@@ -64,9 +68,9 @@ router.get('/balance/:addr', contractIdMiddleware, async (req, res, next) => {
     const sourceSecret = process.env.SOURCE_SECRET_KEY || '';
 
     if (req.contractId && sourceSecret) {
-      // Validate that the address is a valid Stellar account ID.
+      // Validate that the address looks like a Stellar account ID (G…).
       if (!validateStellarAddress(addr)) {
-        return invalidAddress(res, 'addr');
+        return res.status(400).json({ error: 'invalid Stellar address: addr' });
       }
 
       const sourceKeypair = Keypair.fromSecret(sourceSecret);
@@ -110,7 +114,7 @@ router.get('/allowance', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !spender) {
       return res.status(400).json({ error: 'owner and spender query params required' });
     }
-    return res.json({
+    res.json({
       success: true,
       data: { owner, spender, allowance: 0, contractId: req.contractId },
     });
@@ -123,10 +127,10 @@ router.post('/mint', contractIdMiddleware, async (req, res, next) => {
   try {
     const { to, amount } = req.body;
     if (!to || !amount) return res.status(400).json({ error: 'to and amount required' });
-    if (!validateStellarAddress(to)) return invalidAddress(res, 'to');
+    if (rejectInvalidAddress(res, 'to', to)) return;
     if (Number(amount) <= 0) return res.status(400).json({ error: 'amount must be positive' });
     logger.info(`mint to=${to} amount=${amount}`);
-    return res.status(202).json({
+    res.status(202).json({
       success: true,
       message: 'Mint transaction ready.',
       data: { to, amount, contractId: req.contractId },
@@ -140,8 +144,8 @@ router.post('/burn', contractIdMiddleware, async (req, res, next) => {
   try {
     const { from, amount } = req.body;
     if (!from || !amount) return res.status(400).json({ error: 'from and amount required' });
-    if (!validateStellarAddress(from)) return invalidAddress(res, 'from');
-    return res.status(202).json({
+    if (rejectInvalidAddress(res, 'from', from)) return;
+    res.status(202).json({
       success: true,
       message: 'Burn transaction ready.',
       data: { from, amount, contractId: req.contractId },
@@ -157,9 +161,9 @@ router.post('/transfer', contractIdMiddleware, async (req, res, next) => {
     if (!from || !to || !amount) {
       return res.status(400).json({ error: 'from, to and amount required' });
     }
-    if (!validateStellarAddress(from)) return invalidAddress(res, 'from');
-    if (!validateStellarAddress(to)) return invalidAddress(res, 'to');
-    return res.status(202).json({
+    if (rejectInvalidAddress(res, 'from', from)) return;
+    if (rejectInvalidAddress(res, 'to', to)) return;
+    res.status(202).json({
       success: true,
       message: 'Transfer transaction ready.',
       data: { from, to, amount, contractId: req.contractId },
@@ -175,9 +179,9 @@ router.post('/approve', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !spender || amount === undefined) {
       return res.status(400).json({ error: 'owner, spender and amount required' });
     }
-    if (!validateStellarAddress(owner)) return invalidAddress(res, 'owner');
-    if (!validateStellarAddress(spender)) return invalidAddress(res, 'spender');
-    return res.status(202).json({
+    if (rejectInvalidAddress(res, 'owner', owner)) return;
+    if (rejectInvalidAddress(res, 'spender', spender)) return;
+    res.status(202).json({
       success: true,
       message: 'Approve transaction ready.',
       data: { owner, spender, amount, contractId: req.contractId },
