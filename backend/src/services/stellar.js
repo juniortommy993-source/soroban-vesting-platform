@@ -16,7 +16,7 @@ const NETWORK_PASSPHRASE = process.env.STELLAR_NETWORK === 'mainnet'
 const RPC_URL = process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org';
 
 /**
- * Validate a Stellar Ed25519 public key (56-character G... address).
+ * Validate a Stellar Ed25519 public key (56-character G… string).
  * @param {string} addr
  * @returns {boolean}
  */
@@ -77,7 +77,7 @@ async function simulateContractCall({ contractId, method, args, sourceKeypair })
 
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(method, ...args))
     .setTimeout(30)

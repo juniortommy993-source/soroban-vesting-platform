@@ -10,13 +10,13 @@
  * POST /api/multisig/execute           — execute a ready proposal
  * POST /api/multisig/cancel            — cancel a proposal
  * GET  /api/multisig/owners            — list current owners
- * GET  /api/multisig/threshold        — get current threshold
- * GET  /api/multisig/count            — proposal count
+ * GET  /api/multisig/threshold         — get current threshold
+ * GET  /api/multisig/count             — proposal count
  */
 
 const { Router } = require('express');
+logger = require('../logger');
 const { validateStellarAddress } = require('../services/stellar');
-const logger = require('../logger');
 
 const router = Router();
 const CONTRACT_ID = process.env.MULTISIG_CONTRACT_ID || '';
@@ -28,8 +28,16 @@ function contractIdMiddleware(req, res, next) {
   next();
 }
 
-function invalidAddress(res, field) {
-  return res.status(400).json({ error: `invalid Stellar address: ${field}` });
+function requireAddress(res, value, field) {
+  if (!value) {
+    res.status(400).json({ error: `${field} is required` });
+    return false;
+  }
+  if (!validateStellarAddress(value)) {
+    res.status(400).json({ error: `invalid Stellar address: ${field}` });
+    return false;
+  }
+  return true;
 }
 
 router.post('/proposal', contractIdMiddleware, async (req, res, next) => {
@@ -38,7 +46,7 @@ router.post('/proposal', contractIdMiddleware, async (req, res, next) => {
     if (!proposer || !description) {
       return res.status(400).json({ error: 'proposer and description are required' });
     }
-    if (!validateStellarAddress(proposer)) return invalidAddress(res, 'proposer');
+    if (!requireAddress(res, proposer, 'proposer')) return;
     logger.info(`submit proposal proposer=${proposer}`);
     res.status(202).json({
       success: true,
@@ -71,7 +79,7 @@ router.post('/confirm', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !proposalId) {
       return res.status(400).json({ error: 'owner and proposalId are required' });
     }
-    if (!validateStellarAddress(owner)) return invalidAddress(res, 'owner');
+    if (!requireAddress(res, owner, 'owner')) return;
     logger.info(`confirm proposal=${proposalId} owner=${owner}`);
     res.status(202).json({
       success: true,
@@ -89,7 +97,7 @@ router.post('/revoke-confirm', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !proposalId) {
       return res.status(400).json({ error: 'owner and proposalId are required' });
     }
-    if (!validateStellarAddress(owner)) return invalidAddress(res, 'owner');
+    if (!requireAddress(res, owner, 'owner')) return;
     res.status(202).json({
       success: true,
       message: 'Revoke confirmation transaction ready.',
@@ -121,7 +129,7 @@ router.post('/cancel', contractIdMiddleware, async (req, res, next) => {
     if (!caller || !proposalId) {
       return res.status(400).json({ error: 'caller and proposalId are required' });
     }
-    if (!validateStellarAddress(caller)) return invalidAddress(res, 'caller');
+    if (!requireAddress(res, caller, 'caller')) return;
     res.status(202).json({
       success: true,
       message: 'Cancel transaction ready.',
