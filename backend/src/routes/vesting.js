@@ -16,6 +16,7 @@
 
 const { Router } = require('express');
 const logger = require('../logger');
+const { validateStellarAddress } = require('../services/stellar');
 
 const router = Router();
 
@@ -91,6 +92,15 @@ router.post('/schedule', contractIdMiddleware, async (req, res, next) => {
     if (!from || !beneficiary || !tokenAddress || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    if (!validateStellarAddress(from)) {
+      return res.status(400).json({ error: 'invalid Stellar address: from' });
+    }
+    if (!validateStellarAddress(beneficiary)) {
+      return res.status(400).json({ error: 'invalid Stellar address: beneficiary' });
+    }
+    if (!validateStellarAddress(tokenAddress)) {
+      return res.status(400).json({ error: 'invalid Stellar address: tokenAddress' });
+    }
     if (Number(totalAmount) <= 0) {
       return res.status(400).json({ error: 'totalAmount must be positive' });
     }
@@ -129,6 +139,9 @@ router.post('/claim', contractIdMiddleware, async (req, res, next) => {
     if (!scheduleId || !beneficiary) {
       return res.status(400).json({ error: 'scheduleId and beneficiary are required' });
     }
+    if (!validateStellarAddress(beneficiary)) {
+      return res.status(400).json({ error: 'invalid Stellar address: beneficiary' });
+    }
     logger.info(`claim scheduleId=${scheduleId} by=${beneficiary}`);
     res.status(202).json({
       success: true,
@@ -149,6 +162,9 @@ router.post('/revoke', contractIdMiddleware, async (req, res, next) => {
     const { scheduleId, recipient } = req.body;
     if (!scheduleId || !recipient) {
       return res.status(400).json({ error: 'scheduleId and recipient are required' });
+    }
+    if (!validateStellarAddress(recipient)) {
+      return res.status(400).json({ error: 'invalid Stellar address: recipient' });
     }
     logger.info(`revoke scheduleId=${scheduleId} recipient=${recipient}`);
     res.status(202).json({

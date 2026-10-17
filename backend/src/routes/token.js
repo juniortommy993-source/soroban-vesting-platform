@@ -4,7 +4,7 @@
  * Token API Routes
  *
  * GET  /api/token/info              — name, symbol, decimals, total supply
- * GET  /api/token/balance/:addr     — token balance for address
+ * GET  /api/token/balance/:addr      — token balance for address
  * GET  /api/token/allowance         — allowance(owner, spender)
  * POST /api/token/mint              — mint tokens (admin)
  * POST /api/token/burn              — burn tokens
@@ -16,7 +16,7 @@
 
 const { Router } = require('express');
 const { Keypair, nativeToScVal, scValToNative } = require('@stellar/stellar-sdk');
-const { simulateContractCall } = require('../services/stellar');
+const { simulateContractCall, validateStellarAddress } = require('../services/stellar');
 const logger = require('../logger');
 
 const router = Router();
@@ -27,6 +27,10 @@ function contractIdMiddleware(req, res, next) {
   if (!id) return res.status(400).json({ error: 'contractId is required' });
   req.contractId = id;
   next();
+}
+
+function invalidAddress(res, field) {
+  return res.status(400).json({ error: `invalid Stellar address: ${field}` });
 }
 
 router.get('/info', contractIdMiddleware, async (req, res, next) => {
@@ -60,9 +64,9 @@ router.get('/balance/:addr', contractIdMiddleware, async (req, res, next) => {
     const sourceSecret = process.env.SOURCE_SECRET_KEY || '';
 
     if (req.contractId && sourceSecret) {
-      // Validate that the address looks like a Stellar account ID (G…).
-      if (!/^G[A-Z2-7]{55}$/.test(addr)) {
-        return res.status(400).json({ error: 'Invalid Stellar address' });
+      // Validate that the address is a valid Stellar account ID.
+      if (!validateStellarAddress(addr)) {
+        return invalidAddress(res, 'addr');
       }
 
       const sourceKeypair = Keypair.fromSecret(sourceSecret);
@@ -106,7 +110,7 @@ router.get('/allowance', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !spender) {
       return res.status(400).json({ error: 'owner and spender query params required' });
     }
-    res.json({
+    return res.json({
       success: true,
       data: { owner, spender, allowance: 0, contractId: req.contractId },
     });
@@ -119,9 +123,10 @@ router.post('/mint', contractIdMiddleware, async (req, res, next) => {
   try {
     const { to, amount } = req.body;
     if (!to || !amount) return res.status(400).json({ error: 'to and amount required' });
+    if (!validateStellarAddress(to)) return invalidAddress(res, 'to');
     if (Number(amount) <= 0) return res.status(400).json({ error: 'amount must be positive' });
     logger.info(`mint to=${to} amount=${amount}`);
-    res.status(202).json({
+    return res.status(202).json({
       success: true,
       message: 'Mint transaction ready.',
       data: { to, amount, contractId: req.contractId },
@@ -135,7 +140,8 @@ router.post('/burn', contractIdMiddleware, async (req, res, next) => {
   try {
     const { from, amount } = req.body;
     if (!from || !amount) return res.status(400).json({ error: 'from and amount required' });
-    res.status(202).json({
+    if (!validateStellarAddress(from)) return invalidAddress(res, 'from');
+    return res.status(202).json({
       success: true,
       message: 'Burn transaction ready.',
       data: { from, amount, contractId: req.contractId },
@@ -151,7 +157,9 @@ router.post('/transfer', contractIdMiddleware, async (req, res, next) => {
     if (!from || !to || !amount) {
       return res.status(400).json({ error: 'from, to and amount required' });
     }
-    res.status(202).json({
+    if (!validateStellarAddress(from)) return invalidAddress(res, 'from');
+    if (!validateStellarAddress(to)) return invalidAddress(res, 'to');
+    return res.status(202).json({
       success: true,
       message: 'Transfer transaction ready.',
       data: { from, to, amount, contractId: req.contractId },
@@ -167,102 +175,9 @@ router.post('/approve', contractIdMiddleware, async (req, res, next) => {
     if (!owner || !spender || amount === undefined) {
       return res.status(400).json({ error: 'owner, spender and amount required' });
     }
-    res.status(202).json({
-      success: true,
-      message: 'Approve transaction ready.',
-      data: { owner, spender, amount, contractId: req.contractId },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/pause', contractIdMiddleware, async (req, res, next) => {
-  try {
-    res.status(202).json({ success: true, message: 'Pause transaction ready.' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/unpause', contractIdMiddleware, async (req, res, next) => {
-  try {
-    res.status(202).json({ success: true, message: 'Unpause transaction ready.' });
-  } catch (err) {
-    next(err);
-  }
-});
-
-module.exports = router;
-
-router.get('/allowance', contractIdMiddleware, async (req, res, next) => {
-  try {
-    const { owner, spender } = req.query;
-    if (!owner || !spender) {
-      return res.status(400).json({ error: 'owner and spender query params required' });
-    }
-    res.json({
-      success: true,
-      data: { owner, spender, allowance: 0, contractId: req.contractId },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/mint', contractIdMiddleware, async (req, res, next) => {
-  try {
-    const { to, amount } = req.body;
-    if (!to || !amount) return res.status(400).json({ error: 'to and amount required' });
-    if (Number(amount) <= 0) return res.status(400).json({ error: 'amount must be positive' });
-    logger.info(`mint to=${to} amount=${amount}`);
-    res.status(202).json({
-      success: true,
-      message: 'Mint transaction ready.',
-      data: { to, amount, contractId: req.contractId },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/burn', contractIdMiddleware, async (req, res, next) => {
-  try {
-    const { from, amount } = req.body;
-    if (!from || !amount) return res.status(400).json({ error: 'from and amount required' });
-    res.status(202).json({
-      success: true,
-      message: 'Burn transaction ready.',
-      data: { from, amount, contractId: req.contractId },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/transfer', contractIdMiddleware, async (req, res, next) => {
-  try {
-    const { from, to, amount } = req.body;
-    if (!from || !to || !amount) {
-      return res.status(400).json({ error: 'from, to and amount required' });
-    }
-    res.status(202).json({
-      success: true,
-      message: 'Transfer transaction ready.',
-      data: { from, to, amount, contractId: req.contractId },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/approve', contractIdMiddleware, async (req, res, next) => {
-  try {
-    const { owner, spender, amount } = req.body;
-    if (!owner || !spender || amount === undefined) {
-      return res.status(400).json({ error: 'owner, spender and amount required' });
-    }
-    res.status(202).json({
+    if (!validateStellarAddress(owner)) return invalidAddress(res, 'owner');
+    if (!validateStellarAddress(spender)) return invalidAddress(res, 'spender');
+    return res.status(202).json({
       success: true,
       message: 'Approve transaction ready.',
       data: { owner, spender, amount, contractId: req.contractId },

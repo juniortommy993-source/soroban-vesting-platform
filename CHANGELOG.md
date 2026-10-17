@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added — 2026-10-17
+
+- backend/src/routes/multisig.js: fixed a duplicate `router` declaration
+  (TS2451, `Cannot redeclare block-scoped variable 'router'`) that caused the
+  local syntax check and the Jest load step to fail before push. Removed the
+  redundant second `const router = express.Router();` declaration; the
+  `validateStellarAddress()` checks on `POST /api/multisig/proposal`
+  (`proposer`) and `POST /api/multisig/confirm` (`owner`) remain in place and
+  return `400 { error: 'invalid Stellar address: <field>' }` for invalid
+  inputs. No behaviour change beyond the syntax fix.
+
+- backend/src/routes/token.js: fixed a syntax error (TS1005, `';' expected`)
+  introduced while wiring Stellar address validation into the token mutation
+  routes. A missing statement terminator caused the local syntax check and the
+  Jest load step to fail before push. No behaviour change beyond the syntax
+  fix; the `validateStellarAddress()` checks on `POST /api/token/mint` (`to`)
+  and `POST /api/token/transfer` (`from`, `to`) remain in place and return
+  `400 { error: 'invalid Stellar address: <field>' }` for invalid inputs.
+
+- backend/src/services/stellar.js: `validateStellarAddress(addr)` helper (#132).
+  Wraps `StrKey.isValidEd25519PublicKey()` from `@stellar/stellar-sdk` and
+  returns `true` only for valid 56-character `G...` Stellar public keys.
+  Applied to all address fields in the vesting, token, and multisig mutation
+  routes: `POST /api/vesting/schedule` (`from`, `beneficiary`, `tokenAddress`),
+  `POST /api/vesting/claim` (`beneficiary`), `POST /api/vesting/revoke`
+  (`recipient`), `POST /api/token/mint` (`to`), `POST /api/token/transfer`
+  (`from`, `to`), `POST /api/multisig/proposal` (`proposer`), and
+  `POST /api/multisig/confirm` (`owner`). Invalid addresses now return
+  `400 { error: 'invalid Stellar address: <field>' }` instead of a confusing
+  500 from the SDK. New tests added in `vesting.test.js`, `token.test.js`,
+  and `multisig.test.js`.
+
 ### Tests — 2026-10-17
 
 - contracts/vesting/src/lib.rs: `test_revoke_after_full_claim_no_beneficiary_transfer`
@@ -31,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `deploy_stellar_asset_token`, `deploy_real_token`, `dummy`. All three test
   modules import from `test_helpers`. No test logic changed; all 45 existing
   tests continue to pass.
+
+### Fixed — 2026-10-17
+
+- backend/src/routes/token.js: syntax error fix (TS1005 `';' expected`).
+  Restores a clean parse so the backend syntax check and Jest load step pass.
+  See the `Added — 2026-10-17` entry above for the address-validation context.
 
 ### Added — 2026-10-17
 
