@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-81-add-stellar-address-format-validation-to",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-81-add-stellar-address-format-validation-to": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-81-add-stellar-address-format-validation-to",
+    "origin"
+  ]
+}
